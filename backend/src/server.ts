@@ -15,6 +15,7 @@ import orderRoutes from './routes/orders.routes';
 dotenv.config();
 
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 // 1. Blindagem Básica (Helmet esconde headers do Express)
