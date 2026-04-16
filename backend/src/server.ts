@@ -34,7 +34,7 @@ app.use(limiter);
 // Por enquanto aceita tudo no localhost, mas no futuro limitaremos ao domínio da Vercel
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://seu-dominio-vercel.app' // URL do Front na Vercel (Sprint futura)
+    ? 'https://ale-maris-mini-festas.vercel.app' // URL do Front na Vercel (Sprint futura)
     : 'http://localhost:5173',         // URL do Front no Vite (Local)
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
