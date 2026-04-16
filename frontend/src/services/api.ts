@@ -3,7 +3,7 @@ import { setupCache } from 'axios-cache-interceptor';
 
 // Cria a instância base do Axios
 const instance = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: 'https://backoffice-festas-api.onrender.com/api',
 });
 
 // Envolve a instância com o superpoder do Cache
