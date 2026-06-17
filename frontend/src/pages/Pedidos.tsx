@@ -8,6 +8,7 @@ interface Order {
   client_id: string;
   kit_id: string;
   client_name: string; // Vindo do JOIN do backend
+  client_whatsapp: string;
   kit_name: string;    // Vindo do JOIN do backend
   event_date: string;
   assembly_time: string;
@@ -156,6 +157,36 @@ export function Pedidos() {
     return new Date(date.getTime() + date.getTimezoneOffset() * 60000).toLocaleDateString('pt-BR'); 
   }
 
+  // 🟢 Integração com WhatsApp
+  function handleWhatsApp(order: Order) {
+    if (!order.client_whatsapp) {
+      alert('Este cliente não tem número de WhatsApp registado!');
+      return;
+    }
+
+    // Limpa tudo o que não for número (ex: parênteses, traços)
+    const number = order.client_whatsapp.replace(/\D/g, ''); 
+    const missingToPay = Number(order.negotiated_value) - Number(order.advance_fee);
+    
+    // Montagem do texto automático
+    let text = `Olá, ${order.client_name}! Tudo bem?\nAqui é da *Ale Maris Mini Festas*. 🎈\n\n`;
+    text += `Este é um lembrete sobre a sua reserva do *${order.kit_name}* para a festa do dia *${formatDateVisual(order.event_date)}*.\n`;
+    
+    if (order.status_payment?.toUpperCase() === 'PENDENTE' || order.status_payment?.toUpperCase() === 'PARCIAL') {
+        text += `\nO valor final fechado foi de ${formatCurrencyVisual(order.negotiated_value)}, e consta um valor pendente de *${formatCurrencyVisual(missingToPay)}* para a quitação.`;
+    } else {
+        text += `\nO seu pedido já consta como *QUITADO*. Muito obrigado pela preferência!`;
+    }
+
+    text += `\n\nQualquer dúvida, estou à disposição!`;
+    
+    // Converte o texto para formato de link de internet
+    const encodedText = encodeURIComponent(text);
+    
+    // Abre a janela do WhatsApp Web ou App (Se o número for do Brasil, metemos o 55 à frente)
+    window.open(`https://wa.me/55${number}?text=${encodedText}`, '_blank');
+  }
+
   if (loading) return <div className="flex justify-center mt-10"><p className="text-gray-500">A carregar agenda...</p></div>;
 
   // --- MODO: FORMULÁRIO ---
@@ -271,6 +302,9 @@ export function Pedidos() {
                       <p className="text-sm text-indigo-600 font-medium">{order.kit_name}</p>
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => handleWhatsApp(order)} className="text-gray-400 hover:text-green-500 mr-2" title="Cobrar via WhatsApp">
+                        💬
+                      </button>
                       <button onClick={() => handleEdit(order)} className="text-gray-400 hover:text-indigo-600">✏️</button>
                       <button onClick={() => handleDelete(order.id)} className="text-gray-400 hover:text-red-600">🗑️</button>
                     </div>
