@@ -6,6 +6,7 @@ import { Clientes } from './pages/Clientes';
 import { Estoque } from './pages/Estoque';
 import { Pedidos } from './pages/Pedidos';
 import { Dashboard } from './pages/Dashboard';
+import { Catalogo } from './pages/Catalogo';
 
 // 🛡️ COMPONENTE DE PROTEÇÃO: Se não tiver token, chuta pro Login!
 function PrivateRoute({ children }: { children: JSX.Element }) {
@@ -21,6 +22,9 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         
+        {/* 🌐 Rota PÚBLICA — Vitrine Virtual (sem autenticação) */}
+        <Route path="/catalogo" element={<Catalogo />} />
+
         {/* Todas as rotas DENTRO do Layout passam pela proteção */}
         <Route 
           path="/" 
@@ -30,7 +34,7 @@ function App() {
             </PrivateRoute>
           }
         >
-          // Aqui dentro ficam as rotas que aparecem DENTRO do Layout (com a barra de baixo e o header)
+          {/* Aqui dentro ficam as rotas que aparecem DENTRO do Layout (com a barra de baixo e o header) */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="estoque" element={<Estoque />} />

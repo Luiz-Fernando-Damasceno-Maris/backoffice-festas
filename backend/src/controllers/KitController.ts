@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
+import { uploadImageToStorage, deleteImageFromStorage } from '../services/uploadService';
 
 export class KitController {
   async create(req: Request, res: Response): Promise<void> {
@@ -9,18 +10,30 @@ export class KitController {
     const client = await pool.connect();
 
     try {
+      // Se veio uma imagem no multipart, faz upload ao Supabase Storage
+      let imageUrl: string | null = null;
+      if (req.file) {
+        imageUrl = await uploadImageToStorage(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype
+        );
+      }
+
       await client.query('BEGIN'); // Inicia a transação de segurança
 
-      // 1. Cria o Kit
+      // 1. Cria o Kit (agora com image_url)
       const kitResult = await client.query(
-        'INSERT INTO kits (name, base_price, total_quantity) VALUES ($1, $2, $3) RETURNING *',
-        [name, base_price, total_quantity]
+        'INSERT INTO kits (name, base_price, total_quantity, image_url) VALUES ($1, $2, $3, $4) RETURNING *',
+        [name, base_price, total_quantity, imageUrl]
       );
       const kit = kitResult.rows[0];
 
       // 2. Associa os Itens ao Kit (M:N)
-      if (item_ids && Array.isArray(item_ids) && item_ids.length > 0) {
-        for (const itemId of item_ids) {
+      // item_ids pode vir como string JSON ou array (multipart envia tudo como string)
+      const parsedItemIds = typeof item_ids === 'string' ? JSON.parse(item_ids) : item_ids;
+      if (parsedItemIds && Array.isArray(parsedItemIds) && parsedItemIds.length > 0) {
+        for (const itemId of parsedItemIds) {
           await client.query(
             'INSERT INTO kit_items (kit_id, item_id) VALUES ($1, $2)',
             [kit.id, itemId]
@@ -64,6 +77,7 @@ export class KitController {
       res.status(500).json({ message: 'Erro ao listar kits.' });
     }
   }
+
   // 3. Atualizar um Kit (Update com Transação)
   async update(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
@@ -72,13 +86,37 @@ export class KitController {
     const client = await pool.connect();
 
     try {
+      // Se veio uma nova imagem, faz upload
+      let imageUrl: string | undefined;
+      if (req.file) {
+        // Primeiro, tenta apagar a imagem antiga do Storage
+        const oldKit = await client.query('SELECT image_url FROM kits WHERE id = $1', [id]);
+        if (oldKit.rows[0]?.image_url) {
+          await deleteImageFromStorage(oldKit.rows[0].image_url);
+        }
+        
+        imageUrl = await uploadImageToStorage(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype
+        );
+      }
+
       await client.query('BEGIN'); // Inicia a transação
 
-      // 1. Atualiza os dados base do Kit
-      const kitResult = await client.query(
-        'UPDATE kits SET name = $1, base_price = $2, total_quantity = $3 WHERE id = $4 RETURNING *',
-        [name, base_price, total_quantity, id]
-      );
+      // 1. Atualiza os dados base do Kit (com ou sem nova imagem)
+      let kitResult;
+      if (imageUrl !== undefined) {
+        kitResult = await client.query(
+          'UPDATE kits SET name = $1, base_price = $2, total_quantity = $3, image_url = $4 WHERE id = $5 RETURNING *',
+          [name, base_price, total_quantity, imageUrl, id]
+        );
+      } else {
+        kitResult = await client.query(
+          'UPDATE kits SET name = $1, base_price = $2, total_quantity = $3 WHERE id = $4 RETURNING *',
+          [name, base_price, total_quantity, id]
+        );
+      }
 
       if (kitResult.rowCount === 0) {
         await client.query('ROLLBACK');
@@ -89,12 +127,13 @@ export class KitController {
       const kit = kitResult.rows[0];
 
       // 2. Se o Front-end mandou uma nova lista de peças (item_ids)
-      if (item_ids && Array.isArray(item_ids)) {
+      const parsedItemIds = typeof item_ids === 'string' ? JSON.parse(item_ids) : item_ids;
+      if (parsedItemIds && Array.isArray(parsedItemIds)) {
         // Apaga as associações antigas deste kit
         await client.query('DELETE FROM kit_items WHERE kit_id = $1', [id]);
         
         // Insere as novas associações
-        for (const itemId of item_ids) {
+        for (const itemId of parsedItemIds) {
           await client.query(
             'INSERT INTO kit_items (kit_id, item_id) VALUES ($1, $2)',
             [id, itemId]
@@ -119,6 +158,12 @@ export class KitController {
     const { id } = req.params;
 
     try {
+      // Antes de apagar, tenta remover a imagem do Storage
+      const kitData = await pool.query('SELECT image_url FROM kits WHERE id = $1', [id]);
+      if (kitData.rows[0]?.image_url) {
+        await deleteImageFromStorage(kitData.rows[0].image_url);
+      }
+
       // Como o relacionamento em kit_items é ON DELETE CASCADE (que definimos no SQL),
       // ao deletar o kit, o banco já limpa a tabela de ligação automaticamente!
       const result = await pool.query('DELETE FROM kits WHERE id = $1', [id]);
@@ -140,6 +185,31 @@ export class KitController {
       } else {
         res.status(500).json({ message: 'Erro interno ao excluir kit.' });
       }
+    }
+  }
+
+  // 5. Listagem Pública (para a Vitrine — sem autenticação)
+  async listPublic(req: Request, res: Response): Promise<void> {
+    try {
+      const query = `
+        SELECT 
+          k.id, k.name, k.base_price, k.image_url,
+          COALESCE(
+            json_agg(
+              json_build_object('id', i.id, 'name', i.name)
+            ) FILTER (WHERE i.id IS NOT NULL), '[]'
+          ) as items
+        FROM kits k
+        LEFT JOIN kit_items ki ON k.id = ki.kit_id
+        LEFT JOIN items i ON ki.item_id = i.id
+        GROUP BY k.id
+        ORDER BY k.name ASC;
+      `;
+      const result = await pool.query(query);
+      res.status(200).json(result.rows);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Erro ao listar kits da vitrine.' });
     }
   }
 }

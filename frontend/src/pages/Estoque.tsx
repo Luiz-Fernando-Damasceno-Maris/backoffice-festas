@@ -13,6 +13,7 @@ interface Kit {
   name: string;
   base_price: string | number;
   total_quantity: number;
+  image_url: string | null;
   items: Item[]; // O nosso Back-end já devolve as peças embutidas aqui!
 }
 
@@ -37,6 +38,10 @@ export function Estoque() {
   const [kitPrice, setKitPrice] = useState('');
   const [kitQuantity, setKitQuantity] = useState('1');
   const [selectedItems, setSelectedItems] = useState<string[]>([]); // Array com os IDs das peças escolhidas
+
+  // 📷 Estados: IMAGEM DO KIT
+  const [kitImage, setKitImage] = useState<File | null>(null);
+  const [kitImagePreview, setKitImagePreview] = useState<string | null>(null);
 
   // 🔄 Efeitos
   useEffect(() => {
@@ -118,6 +123,20 @@ export function Estoque() {
     }
   }
 
+  // 📷 Handler para seleção de imagem
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null;
+    setKitImage(file);
+    
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setKitImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setKitImagePreview(null);
+    }
+  }
+
   async function handleSaveKit(e: React.FormEvent) {
     e.preventDefault();
     if (selectedItems.length === 0) {
@@ -126,15 +145,37 @@ export function Estoque() {
     }
 
     try {
-      const payload = { 
-        name: kitName, 
-        base_price: Number(kitPrice), 
-        total_quantity: Number(kitQuantity),
-        item_ids: selectedItems 
-      };
+      // Se tem imagem, envia como FormData (multipart)
+      // Senão, envia como JSON normal
+      if (kitImage) {
+        const formData = new FormData();
+        formData.append('name', kitName);
+        formData.append('base_price', kitPrice);
+        formData.append('total_quantity', kitQuantity);
+        formData.append('item_ids', JSON.stringify(selectedItems));
+        formData.append('image', kitImage);
 
-      if (editingKitId) await api.put(`/kits/${editingKitId}`, payload);
-      else await api.post('/kits', payload);
+        if (editingKitId) {
+          await api.put(`/kits/${editingKitId}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } else {
+          await api.post('/kits', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        }
+      } else {
+        // Sem imagem — mantém o comportamento original com JSON
+        const payload = { 
+          name: kitName, 
+          base_price: Number(kitPrice), 
+          total_quantity: Number(kitQuantity),
+          item_ids: selectedItems 
+        };
+
+        if (editingKitId) await api.put(`/kits/${editingKitId}`, payload);
+        else await api.post('/kits', payload);
+      }
       
       closeKitForm();
       loadKits();
@@ -163,6 +204,10 @@ export function Estoque() {
     // Extrai só os IDs das peças que já vieram atreladas ao Kit
     const itemIds = kit.items.map(item => item.id);
     setSelectedItems(itemIds);
+
+    // Se o kit já tem imagem, mostra o preview
+    setKitImage(null); // Não temos o File, mas temos o URL
+    setKitImagePreview(kit.image_url || null);
     
     setEditingKitId(kit.id);
     setIsAddingKit(true);
@@ -170,6 +215,7 @@ export function Estoque() {
 
   function closeKitForm() {
     setKitName(''); setKitPrice(''); setKitQuantity('1'); setSelectedItems([]);
+    setKitImage(null); setKitImagePreview(null);
     setEditingKitId(null); setIsAddingKit(false);
   }
 
@@ -284,6 +330,37 @@ export function Estoque() {
                   </div>
                 </div>
 
+                {/* 📷 UPLOAD DE IMAGEM */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Foto do Kit (opcional)</label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex-1 cursor-pointer">
+                      <div className="flex items-center justify-center gap-2 w-full p-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
+                        <span className="text-lg">📷</span>
+                        <span className="text-sm font-medium">{kitImage ? kitImage.name : 'Escolher imagem...'}</span>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/jpeg,image/png,image/webp,image/gif" 
+                        onChange={handleImageChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                    {kitImagePreview && (
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-indigo-200 flex-shrink-0">
+                        <img src={kitImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => { setKitImage(null); setKitImagePreview(null); }}
+                          className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-bl-md"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* LISTA DE CHECKBOXES PARA PEÇAS */}
                 <div className="pt-2 border-t border-gray-100">
                   <label className="block text-sm font-bold text-gray-800 mb-2">Selecione as Peças deste Kit:</label>
@@ -324,17 +401,27 @@ export function Estoque() {
                 <div className="space-y-3">
                   {kits.map(kit => (
                     <div key={kit.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-indigo-900">{kit.name}</h3>
-                        <div className="flex gap-3">
-                          <button onClick={() => handleEditKit(kit)} className="text-gray-400 hover:text-indigo-600 text-sm">✏️</button>
-                          <button onClick={() => handleDeleteKit(kit.id, kit.name)} className="text-gray-400 hover:text-red-600 text-sm">🗑️</button>
+                      <div className="flex gap-3">
+                        {/* Miniatura da imagem */}
+                        {kit.image_url && (
+                          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                            <img src={kit.image_url} alt={kit.name} className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <h3 className="font-bold text-indigo-900">{kit.name}</h3>
+                            <div className="flex gap-3">
+                              <button onClick={() => handleEditKit(kit)} className="text-gray-400 hover:text-indigo-600 text-sm">✏️</button>
+                              <button onClick={() => handleDeleteKit(kit.id, kit.name)} className="text-gray-400 hover:text-red-600 text-sm">🗑️</button>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-4 text-sm mt-1">
+                            <span className="font-bold text-green-600">{formatCurrencyVisual(kit.base_price)}</span>
+                            <span className="text-gray-500">Estoque: {kit.total_quantity}</span>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="flex gap-4 text-sm mt-1">
-                        <span className="font-bold text-green-600">{formatCurrencyVisual(kit.base_price)}</span>
-                        <span className="text-gray-500">Estoque: {kit.total_quantity}</span>
                       </div>
 
                       {/* Mostrando as peças cadastradas em forma de "tags" */}
