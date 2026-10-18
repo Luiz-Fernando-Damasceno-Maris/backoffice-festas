@@ -45,6 +45,8 @@ export class OrderController {
           o.*,
           c.name AS client_name,
           c.whatsapp AS client_whatsapp,
+          c.cpf AS client_cpf,
+          c.full_address AS client_address,
           k.name AS kit_name
         FROM orders o
         JOIN clients c ON o.client_id = c.id

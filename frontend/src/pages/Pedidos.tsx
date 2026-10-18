@@ -1,15 +1,37 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { generateContractPDF } from '../services/contractGenerator';
 
-interface Client { id: string; name: string; }
-interface Kit { id: string; name: string; base_price: number | string; }
+interface Client { 
+  id: string; 
+  name: string; 
+  whatsapp?: string;
+  cpf?: string;
+  full_address?: string;
+}
+
+interface KitItem {
+  id: string;
+  name: string;
+  replacement_value: string | number;
+}
+
+interface Kit { 
+  id: string; 
+  name: string; 
+  base_price: number | string; 
+  items?: KitItem[];
+}
+
 interface Order {
   id: string;
   client_id: string;
   kit_id: string;
-  client_name: string; // Vindo do JOIN do backend
+  client_name: string;
   client_whatsapp: string;
-  kit_name: string;    // Vindo do JOIN do backend
+  client_cpf?: string;
+  client_address?: string;
+  kit_name: string;
   event_date: string;
   assembly_time: string;
   retrieval_time: string;
@@ -38,6 +60,7 @@ export function Pedidos() {
   const [statusPayment, setStatusPayment] = useState('PENDENTE');
 
   useEffect(() => {
+    document.title = 'Pedidos';
     loadAllData();
   }, []);
 
@@ -187,6 +210,23 @@ export function Pedidos() {
     window.open(`https://wa.me/55${number}?text=${encodedText}`, '_blank');
   }
 
+  // 📄 Geração e Download do Contrato em PDF
+  function handleGenerateContract(order: Order) {
+    try {
+      const client = clients.find(c => c.id === order.client_id);
+      const kit = kits.find(k => k.id === order.kit_id);
+
+      generateContractPDF({
+        order,
+        client,
+        kit,
+      });
+    } catch (error) {
+      console.error('Erro ao gerar contrato:', error);
+      alert('Não foi possível gerar o contrato. Tente novamente.');
+    }
+  }
+
   if (loading) return <div className="flex justify-center mt-10"><p className="text-gray-500">A carregar agenda...</p></div>;
 
   // --- MODO: FORMULÁRIO ---
@@ -301,12 +341,25 @@ export function Pedidos() {
                       <h3 className="font-bold text-gray-800 text-lg leading-tight">{order.client_name}</h3>
                       <p className="text-sm text-indigo-600 font-medium">{order.kit_name}</p>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleWhatsApp(order)} className="text-gray-400 hover:text-green-500 mr-2" title="Cobrar via WhatsApp">
-                        💬
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <button 
+                        onClick={() => handleGenerateContract(order)} 
+                        className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg text-xs font-semibold border border-indigo-200 transition-colors shadow-xs" 
+                        title="Gerar e Baixar Contrato em PDF"
+                      >
+                        <span>📄</span>
+                        <span className="hidden sm:inline">Contrato</span>
                       </button>
-                      <button onClick={() => handleEdit(order)} className="text-gray-400 hover:text-indigo-600">✏️</button>
-                      <button onClick={() => handleDelete(order.id)} className="text-gray-400 hover:text-red-600">🗑️</button>
+                      <button 
+                        onClick={() => handleWhatsApp(order)} 
+                        className="flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 px-2.5 py-1 rounded-lg text-xs font-semibold border border-green-200 transition-colors shadow-xs" 
+                        title="Enviar Lembrete via WhatsApp"
+                      >
+                        <span>💬</span>
+                        <span className="hidden sm:inline">WhatsApp</span>
+                      </button>
+                      <button onClick={() => handleEdit(order)} className="text-gray-400 hover:text-indigo-600 p-1" title="Editar">✏️</button>
+                      <button onClick={() => handleDelete(order.id)} className="text-gray-400 hover:text-red-600 p-1" title="Excluir">🗑️</button>
                     </div>
                   </div>
 
