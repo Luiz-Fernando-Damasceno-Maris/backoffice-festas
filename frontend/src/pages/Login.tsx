@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
@@ -9,6 +9,10 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = 'Login';
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault(); // Evita que a página recarregue ao enviar o formulário
@@ -38,7 +42,7 @@ export function Login() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-600">Backoffice Festas</h1>
+          <h1 className="text-3xl font-bold text-indigo-600">Login</h1>
           <p className="text-gray-500 mt-2">Faça login para gerenciar seus eventos</p>
         </div>
 

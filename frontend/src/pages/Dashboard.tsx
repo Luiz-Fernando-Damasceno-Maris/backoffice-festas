@@ -28,6 +28,7 @@ export function Dashboard() {
   const adminName = adminData ? JSON.parse(adminData).name || 'Admin' : 'Admin';
 
   useEffect(() => {
+    document.title = 'Dashboard';
     async function loadMetrics() {
       try {
         setLoading(true);
